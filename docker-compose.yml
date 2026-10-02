@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tashtech_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DATABASE_URL=sqlite:///./tashtech_submissions.db
+      - CORS_ORIGINS=["*"]
+    volumes:
+      - backend_storage:/app
+    networks:
+      - tashtech_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tashtech_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - tashtech_network
+
+networks:
+  tashtech_network:
+    driver: bridge
+
+volumes:
+  backend_storage:
