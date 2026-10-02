@@ -12,7 +12,6 @@ from .models import Submission
 
 logger = logging.getLogger("tashtech.telegram")
 
-# Shared aiogram bot instance
 bot: Optional[Bot] = None
 dp = Dispatcher()
 
@@ -28,14 +27,21 @@ def get_bot() -> Optional[Bot]:
         return bot
     return None
 
-def get_contact_keyboard(submission_id: int, is_contacted: bool = False) -> InlineKeyboardMarkup:
-    """Create inline keyboard for applicant status tracking."""
-    if is_contacted:
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Aloqaga chiqilgan", callback_data=f"already_contacted:{submission_id}")]
-        ])
+def get_status_keyboard(submission_id: int, current_status: Optional[str] = None) -> InlineKeyboardMarkup:
+    """
+    3 status buttons in 3 separate lines (rows):
+    Line 1: ✅ Aloqaga chiqildi
+    Line 2: 🟡 Telefon ko'tarilmadi
+    Line 3: ❌ Bekor qildi
+    """
+    t1 = "✅ Aloqaga chiqildi (Tanlangan)" if current_status == "Aloqaga chiqildi" else "✅ Aloqaga chiqildi"
+    t2 = "🟡 Telefon ko'tarilmadi (Tanlangan)" if current_status == "Telefon ko'tarilmadi" else "🟡 Telefon ko'tarilmadi"
+    t3 = "❌ Bekor qildi (Tanlangan)" if current_status == "Bekor qildi" else "❌ Bekor qildi"
+
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📞 Aloqaga chiqildi", callback_data=f"contacted:{submission_id}")]
+        [InlineKeyboardButton(text=t1, callback_data=f"status:contacted:{submission_id}")],
+        [InlineKeyboardButton(text=t2, callback_data=f"status:no_answer:{submission_id}")],
+        [InlineKeyboardButton(text=t3, callback_data=f"status:cancelled:{submission_id}")],
     ])
 
 def format_telegram_message(
@@ -47,11 +53,11 @@ def format_telegram_message(
     school: str,
     question_text: Optional[str] = None,
     created_at: Optional[datetime] = None,
-    is_contacted: bool = False,
-    contacted_by: Optional[str] = None,
-    contacted_at: Optional[datetime] = None
+    status_label: Optional[str] = None,
+    status_by: Optional[str] = None,
+    status_at: Optional[datetime] = None
 ) -> str:
-    """Format submission data cleanly without divider lines, with contact status."""
+    """Format submission data cleanly without divider lines, with chosen status badge."""
     date_str = (created_at or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
     
     clean_name = full_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -67,14 +73,24 @@ def format_telegram_message(
     )
 
     status_badge = ""
-    if is_contacted:
-        c_time = (contacted_at or datetime.now()).strftime("%Y-%m-%d %H:%M")
-        status_badge = (
-            f"\n\n✅ <b>Holati:</b> Aloqaga chiqildi\n"
-            f"👤 <b>Mas'ul xodim:</b> {contacted_by or 'Xodim'} ({c_time})"
-        )
+    if status_label and status_by:
+        s_time = (status_at or datetime.now()).strftime("%Y-%m-%d %H:%M")
+        if status_label == "Aloqaga chiqildi":
+            status_badge = (
+                f"\n\n✅ <b>Holati:</b> Aloqaga chiqildi\n"
+                f"👤 <b>Mas'ul xodim:</b> {status_by} ({s_time})"
+            )
+        elif status_label == "Telefon ko'tarilmadi":
+            status_badge = (
+                f"\n\n🟡 <b>Holati:</b> Telefon ko'tarilmadi\n"
+                f"👤 <b>Tekshirdi:</b> {status_by} ({s_time})"
+            )
+        elif status_label == "Bekor qildi":
+            status_badge = (
+                f"\n\n❌ <b>Holati:</b> Bekor qildi\n"
+                f"👤 <b>Mas'ul xodim:</b> {status_by} ({s_time})"
+            )
 
-    # Clean formatted message without decorative lines
     message = (
         f"🚀 <b>YANGI ARIZA: TashTech Foundation</b>\n\n"
         f"🆔 <b>Ariza raqami:</b> #{submission_id}\n"
@@ -91,24 +107,37 @@ def format_telegram_message(
     return message
 
 
-@dp.callback_query(F.data.startswith("contacted:"))
-async def on_contacted_callback(callback: CallbackQuery):
-    """Handle staff clicking 'Aloqaga chiqildi' button."""
+@dp.callback_query(F.data.startswith("status:"))
+async def on_status_callback(callback: CallbackQuery):
+    """Handle clicking any of the 3 status buttons."""
     try:
-        sub_id_str = callback.data.split(":")[1]
-        submission_id = int(sub_id_str)
+        parts = callback.data.split(":")
+        action = parts[1]  # "contacted", "no_answer", "cancelled"
+        submission_id = int(parts[2])
         
-        # Determine who pressed the button
         from_user = callback.from_user
         user_name = f"@{from_user.username}" if from_user.username else from_user.full_name
         now = datetime.now(timezone.utc)
         
-        # Update Database
         db = SessionLocal()
         try:
             sub = db.query(Submission).filter(Submission.id == submission_id).first()
             if sub:
-                sub.is_contacted = True
+                if action == "contacted":
+                    sub.status = "Aloqaga chiqildi"
+                    sub.is_contacted = True
+                    alert_text = "✅ Belgilandi: Aloqaga chiqildi!"
+                elif action == "no_answer":
+                    sub.status = "Telefon ko'tarilmadi"
+                    sub.is_contacted = False
+                    alert_text = "🟡 Belgilandi: Telefon ko'tarilmadi!"
+                elif action == "cancelled":
+                    sub.status = "Bekor qildi"
+                    sub.is_contacted = False
+                    alert_text = "❌ Belgilandi: Bekor qildi!"
+                else:
+                    alert_text = "Holat yangilandi"
+
                 sub.contacted_by = user_name
                 sub.contacted_at = now
                 db.commit()
@@ -124,34 +153,27 @@ async def on_contacted_callback(callback: CallbackQuery):
                     school=sub.school,
                     question_text=sub.question_text,
                     created_at=sub.created_at,
-                    is_contacted=True,
-                    contacted_by=user_name,
-                    contacted_at=now
+                    status_label=sub.status,
+                    status_by=user_name,
+                    status_at=now
                 )
                 
-                # Edit message in Telegram with updated text and button
                 if callback.message:
                     await callback.message.edit_text(
                         text=new_text,
-                        reply_markup=get_contact_keyboard(submission_id, is_contacted=True),
+                        reply_markup=get_status_keyboard(submission_id, current_status=sub.status),
                         disable_web_page_preview=True
                     )
                 
-                await callback.answer(f"✅ Qabul qilindi: {user_name} aloqaga chiqdi!", show_alert=False)
-                logger.info(f"Submission #{submission_id} marked as contacted by {user_name}")
+                await callback.answer(alert_text, show_alert=False)
+                logger.info(f"Submission #{submission_id} status updated to '{sub.status}' by {user_name}")
             else:
                 await callback.answer("Ariza topilmadi.", show_alert=True)
         finally:
             db.close()
     except Exception as e:
-        logger.exception(f"Error handling contacted callback: {e}")
+        logger.exception(f"Error handling status callback: {e}")
         await callback.answer("Xatolik yuz berdi.", show_alert=True)
-
-
-@dp.callback_query(F.data.startswith("already_contacted:"))
-async def on_already_contacted_callback(callback: CallbackQuery):
-    """Alert user that this applicant has already been contacted."""
-    await callback.answer("Ushbu abituriyent bilan allaqachon aloqaga chiqilgan!", show_alert=False)
 
 
 async def send_to_telegram(
@@ -165,7 +187,7 @@ async def send_to_telegram(
     created_at: Optional[datetime] = None
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    Send submission notification to Telegram group with inline keyboard button.
+    Send submission notification to Telegram group with 3 inline status buttons in 3 lines.
     """
     current_bot = get_bot()
     chat_id = settings.TELEGRAM_CHAT_ID
@@ -179,7 +201,7 @@ async def send_to_telegram(
         school=school,
         question_text=question_text,
         created_at=created_at,
-        is_contacted=False
+        status_label=None
     )
 
     if not current_bot or not chat_id:
@@ -190,7 +212,7 @@ async def send_to_telegram(
         return True, "simulated_local_mode", None
 
     try:
-        keyboard = get_contact_keyboard(submission_id, is_contacted=False)
+        keyboard = get_status_keyboard(submission_id, current_status=None)
         sent_message = await current_bot.send_message(
             chat_id=chat_id,
             text=message_html,
@@ -198,7 +220,7 @@ async def send_to_telegram(
             disable_web_page_preview=True
         )
         msg_id = str(sent_message.message_id)
-        logger.info(f"[aiogram] Successfully sent submission #{submission_id} to Telegram chat {chat_id} (msg_id: {msg_id})")
+        logger.info(f"[aiogram] Successfully sent submission #{submission_id} with 3 buttons to Telegram chat {chat_id} (msg_id: {msg_id})")
         return True, msg_id, None
     except TelegramAPIError as e:
         logger.error(f"[aiogram] Telegram API error for #{submission_id}: {e}")

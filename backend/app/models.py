@@ -18,7 +18,8 @@ class Submission(Base):
     telegram_message_id = Column(String(100), nullable=True)
     telegram_error = Column(Text, nullable=True)
 
-    # Contact status
+    # Status tracking ("Yangi", "Aloqaga chiqildi", "Telefon ko'tarilmadi", "Bekor qildi")
+    status = Column(String(50), default="Yangi")
     is_contacted = Column(Boolean, default=False)
     contacted_by = Column(String(100), nullable=True)
     contacted_at = Column(DateTime, nullable=True)
@@ -29,4 +30,4 @@ class Submission(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
-        return f"<Submission(id={self.id}, name='{self.full_name}', contacted={self.is_contacted})>"
+        return f"<Submission(id={self.id}, name='{self.full_name}', status='{self.status}')>"
