@@ -35,6 +35,9 @@ class SubmissionResponse(BaseModel):
     school: str
     question_text: Optional[str] = None
     telegram_sent: bool
+    is_contacted: bool = False
+    contacted_by: Optional[str] = None
+    contacted_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

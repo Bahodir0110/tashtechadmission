@@ -1,15 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from typing import List
+from fastapi import FastAPI, Depends, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import engine, Base, get_db
 from .models import Submission
 from .schemas import SubmissionCreate, SubmissionResponse, HealthResponse
-from .telegram_bot import send_to_telegram
+from .telegram_bot import send_to_telegram, get_bot, dp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,7 +26,30 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
-    yield
+
+    # Start aiogram background polling for inline button callbacks
+    polling_task = None
+    bot_instance = get_bot()
+    if bot_instance:
+        logger.info("Starting aiogram dispatcher polling for inline button callbacks...")
+        polling_task = asyncio.create_task(
+            dp.start_polling(bot_instance, allowed_updates=["message", "callback_query"])
+        )
+    else:
+        logger.warning("Telegram bot not configured; polling skipped.")
+
+    try:
+        yield
+    finally:
+        if polling_task:
+            logger.info("Stopping aiogram polling...")
+            polling_task.cancel()
+            try:
+                await polling_task
+            except asyncio.CancelledError:
+                pass
+        if bot_instance:
+            await bot_instance.session.close()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -76,7 +100,7 @@ async def create_submission(
     """
     Receive applicant form submission:
     1. Saves data to local SQLite database.
-    2. Sends formatted instant notification to Telegram group chat via aiogram.
+    2. Sends formatted instant notification with inline button to Telegram group chat.
     3. Returns created submission with delivery status.
     """
     client_ip = request.client.host if request.client else None
@@ -99,7 +123,7 @@ async def create_submission(
     db.commit()
     db.refresh(db_submission)
 
-    # 2. Dispatch to Telegram with aiogram
+    # 2. Dispatch to Telegram with inline button
     tg_success, tg_msg_id, tg_err = await send_to_telegram(
         submission_id=db_submission.id,
         full_name=db_submission.full_name,
