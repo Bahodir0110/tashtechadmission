@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
-from fastapi import FastAPI, Depends, Request, status
+from fastapi import FastAPI, Depends, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from aiogram.types import Update
@@ -181,6 +181,10 @@ from datetime import datetime, timezone
 
 def seed_initial_data(db: Session):
     try:
+        already_seeded = db.query(BotSession).filter(BotSession.user_id == "__SEED_DONE__").first()
+        if already_seeded:
+            return
+
         count = db.query(Submission).count()
         if count == 0:
             seed_file = Path(__file__).resolve().parent / "seed_submissions.json"
@@ -219,8 +223,9 @@ def seed_initial_data(db: Session):
                         created_at=c_at or datetime.now(timezone.utc)
                     )
                     db.add(sub)
-                db.commit()
                 logger.info(f"Successfully seeded {len(data)} initial submissions.")
+        db.add(BotSession(user_id="__SEED_DONE__", step="DONE", data="{}"))
+        db.commit()
     except Exception as e:
         logger.warning(f"Could not seed initial submissions: {e}")
 
@@ -236,3 +241,29 @@ def get_submissions(skip: int = 0, limit: int = 10000, db: Session = Depends(get
         .all()
     )
     return submissions
+
+@app.delete("/api/submissions/{submission_id}", status_code=status.HTTP_200_OK)
+def delete_submission(submission_id: int, db: Session = Depends(get_db)):
+    """Delete a single submission by ID to remove clutter/test entries."""
+    sub = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Ariza topilmadi")
+    db.delete(sub)
+    db.commit()
+    return {"ok": True, "deleted_id": submission_id}
+
+@app.post("/api/submissions/bulk-delete")
+async def bulk_delete_submissions(request: Request, db: Session = Depends(get_db)):
+    """Delete multiple submissions at once."""
+    try:
+        body = await request.json()
+        ids = body.get("ids", [])
+        if not ids:
+            return {"ok": True, "deleted_count": 0}
+        deleted = db.query(Submission).filter(Submission.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        return {"ok": True, "deleted_count": deleted}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+

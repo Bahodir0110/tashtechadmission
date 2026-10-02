@@ -12,7 +12,10 @@ import {
   Clock, 
   Users, 
   ExternalLink,
-  ArrowLeft
+  ArrowLeft,
+  Trash2,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 export default function ExcelExportPage() {
@@ -22,6 +25,9 @@ export default function ExcelExportPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deletingId, setDeletingId] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const fetchSubmissions = async () => {
     setLoading(true);
@@ -98,6 +104,76 @@ export default function ExcelExportPage() {
     return { total, contacted, noAnswer, cancelled, pending };
   }, [submissions]);
 
+  // Single delete handler
+  const handleDeleteSingle = async (id, name) => {
+    if (!window.confirm(`Haqiqatan ham #${id} - "${name}" arizasini o'chirmoqchimisiz?`)) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const apiEndpoint = import.meta.env.VITE_API_URL 
+        ? `${import.meta.env.VITE_API_URL}/api/submissions/${id}` 
+        : `/api/submissions/${id}`;
+      const res = await fetch(apiEndpoint, { method: 'DELETE' });
+      if (!res.ok) throw new Error("O'chirishda xatolik yuz berdi");
+      setSubmissions(prev => prev.filter(s => s.id !== id));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Haqiqatan ham tanlangan ${selectedIds.size} ta arizani bazadan butunlay o'chirmoqchimisiz?`)) {
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      const idsArray = Array.from(selectedIds);
+      const apiEndpoint = import.meta.env.VITE_API_URL 
+        ? `${import.meta.env.VITE_API_URL}/api/submissions/bulk-delete` 
+        : `/api/submissions/bulk-delete`;
+      const res = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsArray })
+      });
+      if (!res.ok) throw new Error("O'chirishda xatolik yuz berdi");
+      setSubmissions(prev => prev.filter(s => !selectedIds.has(s.id)));
+      setSelectedIds(new Set());
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Selection toggles
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredSubmissions.length && filteredSubmissions.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredSubmissions.map(s => s.id)));
+    }
+  };
+
+  const toggleSelectRow = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   // Export to Microsoft Excel (.xlsx)
   const exportToExcel = () => {
     if (!submissions || submissions.length === 0) {
@@ -123,7 +199,7 @@ export default function ExcelExportPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(formattedRows);
 
-    // Set professional column widths
+    // Set column widths
     worksheet['!cols'] = [
       { wch: 6 },  // ID
       { wch: 32 }, // F.I.Sh
@@ -203,7 +279,7 @@ export default function ExcelExportPage() {
   const getStatusBadge = (status) => {
     if (status === 'Aloqaga chiqildi') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           Aloqaga chiqildi
         </span>
@@ -211,27 +287,29 @@ export default function ExcelExportPage() {
     }
     if (status === 'Telefon ko\'tarilmadi') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
           <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-          Telefon ko'tarilmadi
+          Ko'tarilmadi
         </span>
       );
     }
     if (status === 'Bekor qildi') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-300">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-300">
           <XCircle className="w-3.5 h-3.5 text-rose-600" />
           Bekor qildi
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">
         <Clock className="w-3.5 h-3.5 text-slate-500" />
         Yangi
       </span>
     );
   };
+
+  const allSelected = filteredSubmissions.length > 0 && selectedIds.size === filteredSubmissions.length;
 
   return (
     <div className="min-h-screen bg-[#edf0f5] text-slate-800 flex flex-col font-sans">
@@ -260,6 +338,18 @@ export default function ExcelExportPage() {
           </div>
 
           <div className="flex items-center gap-2.5">
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white transition shadow-sm disabled:opacity-50 animate-in fade-in"
+                title="Tanlangan barcha arizalarni o'chirish"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Tanlanganlarni o'chirish ({selectedIds.size})</span>
+              </button>
+            )}
+
             <button
               onClick={fetchSubmissions}
               disabled={loading}
@@ -419,9 +509,16 @@ export default function ExcelExportPage() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-            <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-              Arizalar ro'yxati ({filteredSubmissions.length} ta ko'rsatilmoqda)
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Arizalar ro'yxati ({filteredSubmissions.length} ta ko'rsatilmoqda)
+              </p>
+              {selectedIds.size > 0 && (
+                <span className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                  {selectedIds.size} ta ariza tanlandi
+                </span>
+              )}
+            </div>
             <span className="text-xs text-slate-500">
               Excel yuklanganda barcha {filteredSubmissions.length} ta yozuv kiritiladi
             </span>
@@ -431,34 +528,48 @@ export default function ExcelExportPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0 z-10 border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-3.5 w-12 text-center">#</th>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <button 
+                      onClick={toggleSelectAll} 
+                      className="text-slate-500 hover:text-slate-800 transition"
+                      title={allSelected ? "Barchasini bekor qilish" : "Barchasini tanlash"}
+                    >
+                      {allSelected ? (
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3 px-3 w-12 text-center">#</th>
                   <th className="py-3 px-4 min-w-[180px]">F.I.Sh</th>
                   <th className="py-3 px-4 min-w-[140px]">Telefon</th>
                   <th className="py-3 px-4 min-w-[140px]">Telegram</th>
                   <th className="py-3 px-4 min-w-[150px]">Viloyat / Hudud</th>
                   <th className="py-3 px-4 min-w-[180px]">Maktab / Litsey</th>
                   <th className="py-3 px-4 min-w-[200px]">Savol / Izoh</th>
-                  <th className="py-3 px-4 min-w-[160px]">Holati</th>
-                  <th className="py-3 px-4 min-w-[150px]">Mas'ul xodim</th>
-                  <th className="py-3 px-4 min-w-[140px]">Topshirilgan vaqt</th>
+                  <th className="py-3 px-4 min-w-[150px]">Holati</th>
+                  <th className="py-3 px-4 min-w-[140px]">Mas'ul xodim</th>
+                  <th className="py-3 px-4 min-w-[130px]">Topshirilgan vaqt</th>
+                  <th className="py-3 px-3.5 w-16 text-center">Amal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={12} className="py-12 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-400" />
                       Arizalar yuklanmoqda...
                     </td>
                   </tr>
                 ) : filteredSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={12} className="py-12 text-center text-slate-400">
                       Hech qanday ariza topilmadi
                     </td>
                   </tr>
                 ) : (
-                  filteredSubmissions.map((item, index) => {
+                  filteredSubmissions.map((item) => {
                     const formattedDate = item.created_at
                       ? new Date(item.created_at).toLocaleString('uz-UZ', {
                           year: 'numeric',
@@ -470,10 +581,29 @@ export default function ExcelExportPage() {
                       : '-';
 
                     const cleanTg = (item.telegram_username || '').replace(/^@/, '');
+                    const isSelected = selectedIds.has(item.id);
+                    const isDeleting = deletingId === item.id;
 
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-3.5 text-center font-mono font-medium text-slate-400">
+                      <tr 
+                        key={item.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center">
+                          <button 
+                            onClick={() => toggleSelectRow(item.id)}
+                            className="text-slate-400 hover:text-slate-700 transition"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-medium text-slate-400">
                           {item.id}
                         </td>
                         <td className="py-3 px-4 font-semibold text-slate-900">
@@ -508,7 +638,7 @@ export default function ExcelExportPage() {
                         <td className="py-3 px-4 text-slate-700">
                           {item.school}
                         </td>
-                        <td className="py-3 px-4 text-slate-600 max-w-[240px] truncate" title={item.question_text || ''}>
+                        <td className="py-3 px-4 text-slate-600 max-w-[220px] truncate" title={item.question_text || ''}>
                           {item.question_text || <span className="text-slate-300 italic">Izoh yo'q</span>}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
@@ -531,6 +661,16 @@ export default function ExcelExportPage() {
                         <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
                           {formattedDate}
                         </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <button
+                            onClick={() => handleDeleteSingle(item.id, item.full_name)}
+                            disabled={isDeleting}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200"
+                            title="Ushbu arizani o'chirish"
+                          >
+                            <Trash2 className={`w-3.5 h-3.5 ${isDeleting ? 'animate-spin' : ''}`} />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -543,14 +683,26 @@ export default function ExcelExportPage() {
             <span>
               Jami bazada: <strong className="text-slate-800">{submissions.length}</strong> ta ariza
             </span>
-            <button
-              onClick={exportToExcel}
-              disabled={loading || submissions.length === 0}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition disabled:opacity-50"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Barchasini Excel (.xlsx) ga yuklash</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Tanlangan {selectedIds.size} ta arizani o'chirish</span>
+                </button>
+              )}
+              <button
+                onClick={exportToExcel}
+                disabled={loading || submissions.length === 0}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition disabled:opacity-50"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Barchasini Excel (.xlsx) ga yuklash</span>
+              </button>
+            </div>
           </div>
 
         </div>
