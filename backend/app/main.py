@@ -176,7 +176,7 @@ async def create_submission(
     return db_submission
 
 @app.get("/api/submissions", response_model=List[SubmissionResponse])
-def get_submissions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_submissions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     """Retrieve list of submissions ordered by newest first."""
     submissions = (
         db.query(Submission)

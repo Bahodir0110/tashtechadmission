@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
 import HeroBanner from './components/HeroBanner';
 import ProgramHighlights from './components/ProgramHighlights';
@@ -8,7 +8,13 @@ import SubmissionModal from './components/SubmissionModal';
 import EngineeringCanvas from './components/EngineeringCanvas';
 import { translations } from './i18n/translations';
 
+const ExcelExportPage = lazy(() => import('./components/ExcelExportPage'));
+
 export default function App() {
+  const [currentPath, setCurrentPath] = useState(() => {
+    return typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '/';
+  });
+
   const [lang, setLang] = useState(() => {
     return localStorage.getItem('tashtech_lang') || 'uz';
   });
@@ -16,9 +22,33 @@ export default function App() {
   const [lastSubmission, setLastSubmission] = useState(null);
 
   useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname.toLowerCase());
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('tashtech_lang', lang);
     document.documentElement.lang = lang;
   }, [lang]);
+
+  // Direct URL route: /excel (secret admin interface to view & download all leads)
+  if (currentPath === '/excel' || currentPath === '/excel/') {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#edf0f5] flex items-center justify-center text-slate-500 font-sans">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+            <span>Yuklanmoqda...</span>
+          </div>
+        </div>
+      }>
+        <ExcelExportPage />
+      </Suspense>
+    );
+  }
 
   const t = translations[lang] || translations.uz;
 
