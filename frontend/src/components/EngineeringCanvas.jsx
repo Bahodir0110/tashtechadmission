@@ -371,7 +371,7 @@ export default function EngineeringCanvas() {
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none fixed inset-0 z-0 opacity-85"
+      className="pointer-events-none fixed inset-0 z-0 opacity-85 max-w-full overflow-hidden"
     />
   );
 }

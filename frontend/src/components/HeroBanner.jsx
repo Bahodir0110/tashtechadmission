@@ -6,7 +6,7 @@ export default function HeroBanner({ t }) {
     <section id="about" className="relative pt-6 pb-12 overflow-hidden">
       
       {/* Subtle warm ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-orange-500/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-full max-w-[650px] h-[350px] bg-orange-500/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         

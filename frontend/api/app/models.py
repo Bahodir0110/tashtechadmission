@@ -31,3 +31,26 @@ class Submission(Base):
 
     def __repr__(self):
         return f"<Submission(id={self.id}, name='{self.full_name}', status='{self.status}')>"
+
+class BotSession(Base):
+    __tablename__ = "bot_sessions"
+
+    user_id = Column(String(50), primary_key=True, index=True)
+    step = Column(String(50), default="IDLE")  # "NAME", "PHONE", "TG", "REGION", "SCHOOL", "QUESTION", "ASK_QUESTION"
+    data = Column(Text, default="{}")          # JSON string
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class UserQuestion(Base):
+    __tablename__ = "user_questions"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    username = Column(String(100), nullable=True)
+    full_name = Column(String(255), nullable=True)
+    question_text = Column(Text, nullable=False)
+    group_message_id = Column(Integer, nullable=True, index=True)
+    is_answered = Column(Boolean, default=False)
+    answer_text = Column(Text, nullable=True)
+    answered_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+

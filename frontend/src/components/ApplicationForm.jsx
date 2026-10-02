@@ -110,10 +110,10 @@ export default function ApplicationForm({ t, lang, onSubmissionSuccess }) {
   };
 
   return (
-    <section id="apply-form" className="py-16 relative">
+    <section id="apply-form" className="py-16 relative overflow-hidden">
       
       {/* Background ambient lighting */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-orange-500/8 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[650px] h-[400px] bg-orange-500/8 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         

@@ -54,7 +54,7 @@ export default function App() {
   const t = translations[lang] || translations.uz;
 
   return (
-    <div className="relative min-h-screen bg-[#edf0f5] text-slate-800 flex flex-col font-sans selection:bg-[#e54519] selection:text-white">
+    <div className="relative min-h-screen w-full max-w-full overflow-x-hidden bg-[#edf0f5] text-slate-800 flex flex-col font-sans selection:bg-[#e54519] selection:text-white">
       
       {/* Interactive moving engineering canvas (Gears, formulas & particles) */}
       <EngineeringCanvas />

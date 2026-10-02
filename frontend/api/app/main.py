@@ -9,7 +9,7 @@ from aiogram.types import Update
 
 from .config import settings
 from .database import engine, Base, get_db
-from .models import Submission
+from .models import Submission, BotSession, UserQuestion
 from .schemas import SubmissionCreate, SubmissionResponse, HealthResponse
 from .telegram_bot import send_to_telegram, get_bot, dp
 
