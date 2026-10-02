@@ -34,8 +34,9 @@ export default function App() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  // Direct URL route: /excel (secret admin interface to view & download all leads)
-  if (currentPath === '/excel' || currentPath === '/excel/') {
+  // Direct URL route: /jadval (secret admin interface to view & download all leads)
+  const isJadvalRoute = currentPath === '/jadval' || currentPath === '/jadval/' || currentPath === '/excel' || currentPath === '/excel/';
+  if (isJadvalRoute) {
     return (
       <Suspense fallback={
         <div className="min-h-screen bg-[#edf0f5] flex items-center justify-center text-slate-500 font-sans">
