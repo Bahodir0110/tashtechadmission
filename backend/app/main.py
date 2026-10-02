@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 from fastapi import FastAPI, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from aiogram.types import Update
 
 from .config import settings
 from .database import engine, Base, get_db
@@ -27,16 +28,18 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
 
-    # Start aiogram background polling for inline button callbacks
+    # Start aiogram background polling if not on serverless
     polling_task = None
     bot_instance = get_bot()
-    if bot_instance:
+    # Check if running on Vercel
+    import os
+    is_vercel = bool(os.getenv("VERCEL"))
+    
+    if bot_instance and not is_vercel:
         logger.info("Starting aiogram dispatcher polling for inline button callbacks...")
         polling_task = asyncio.create_task(
             dp.start_polling(bot_instance, allowed_updates=["message", "callback_query"])
         )
-    else:
-        logger.warning("Telegram bot not configured; polling skipped.")
 
     try:
         yield
@@ -91,6 +94,37 @@ def health_check(db: Session = Depends(get_db)):
         db_connected=db_ok
     )
 
+@app.post("/api/telegram-webhook")
+async def telegram_webhook(request: Request):
+    """Webhook endpoint for Vercel serverless to process Telegram button clicks."""
+    bot_instance = get_bot()
+    if not bot_instance:
+        return {"ok": False, "error": "Bot not configured"}
+    try:
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot_instance})
+        await dp.feed_update(bot_instance, update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Error handling Telegram webhook: {e}")
+        return {"ok": False, "error": str(e)}
+
+@app.get("/api/set-webhook")
+async def set_telegram_webhook(url: Optional[str] = None):
+    """Helper to set Telegram webhook to your custom domain."""
+    bot_instance = get_bot()
+    if not bot_instance:
+        return {"ok": False, "error": "Bot not configured"}
+    try:
+        if not url:
+            # Info about current webhook
+            info = await bot_instance.get_webhook_info()
+            return {"ok": True, "webhook_info": info.model_dump()}
+        await bot_instance.set_webhook(url=url.strip())
+        return {"ok": True, "message": f"Webhook set to {url}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 @app.post("/api/submissions", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def create_submission(
     payload: SubmissionCreate,
@@ -99,8 +133,8 @@ async def create_submission(
 ):
     """
     Receive applicant form submission:
-    1. Saves data to local SQLite database.
-    2. Sends formatted instant notification with inline button to Telegram group chat.
+    1. Saves data to database.
+    2. Sends formatted instant notification with inline buttons to Telegram group chat.
     3. Returns created submission with delivery status.
     """
     client_ip = request.client.host if request.client else None
@@ -108,7 +142,6 @@ async def create_submission(
 
     logger.info(f"Received new submission from '{payload.full_name}' ({payload.phone}) for school '{payload.school}'")
 
-    # 1. Create DB record
     db_submission = Submission(
         full_name=payload.full_name.strip(),
         phone=payload.phone.strip(),
@@ -123,7 +156,6 @@ async def create_submission(
     db.commit()
     db.refresh(db_submission)
 
-    # 2. Dispatch to Telegram with inline button
     tg_success, tg_msg_id, tg_err = await send_to_telegram(
         submission_id=db_submission.id,
         full_name=db_submission.full_name,
@@ -135,7 +167,6 @@ async def create_submission(
         created_at=db_submission.created_at
     )
 
-    # 3. Update DB record with Telegram dispatch status
     db_submission.telegram_sent = tg_success
     db_submission.telegram_message_id = tg_msg_id
     db_submission.telegram_error = tg_err
