@@ -421,7 +421,7 @@ export default function ExcelExportPage() {
                   autoFocus
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder=""
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition text-slate-900"
                 />
               </div>
@@ -440,7 +440,7 @@ export default function ExcelExportPage() {
                   required
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder=""
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition text-slate-900"
                 />
               </div>
