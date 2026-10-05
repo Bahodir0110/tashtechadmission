@@ -15,12 +15,22 @@ import {
   ArrowLeft,
   Trash2,
   CheckSquare,
-  Square
+  Square,
+  Lock,
+  LogOut,
+  KeyRound,
+  User
 } from 'lucide-react';
 
 export default function ExcelExportPage() {
+  const [token, setToken] = useState(() => sessionStorage.getItem('tashtech_admin_token') || '');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -29,7 +39,8 @@ export default function ExcelExportPage() {
   const [deletingId, setDeletingId] = useState(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = async (activeToken = token) => {
+    if (!activeToken) return;
     setLoading(true);
     setError(null);
     try {
@@ -38,9 +49,18 @@ export default function ExcelExportPage() {
         : '/api/submissions';
         
       const response = await fetch(`${apiEndpoint}?limit=10000`, {
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${activeToken}`
+        }
       });
       
+      if (response.status === 401) {
+        sessionStorage.removeItem('tashtech_admin_token');
+        setToken('');
+        throw new Error("Sessiya eskirgan yoki login/parol noto'g'ri. Iltimos qayta kiring.");
+      }
+
       if (!response.ok) {
         throw new Error(`Server xatosi: ${response.status}`);
       }
@@ -57,8 +77,54 @@ export default function ExcelExportPage() {
   };
 
   useEffect(() => {
-    fetchSubmissions();
-  }, []);
+    if (token) {
+      fetchSubmissions(token);
+    }
+  }, [token]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+      setLoginError("Login va parolni to'ldiring");
+      return;
+    }
+    setIsLoggingIn(true);
+    try {
+      const apiEndpoint = import.meta.env.VITE_API_URL 
+        ? `${import.meta.env.VITE_API_URL}/api/admin/login` 
+        : '/api/admin/login';
+        
+      const res = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginUsername.trim(),
+          password: loginPassword.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.detail || "Login yoki parol noto'g'ri!");
+      }
+
+      sessionStorage.setItem('tashtech_admin_token', data.token);
+      setToken(data.token);
+      setLoginPassword('');
+    } catch (err) {
+      setLoginError(err.message || "Kirishda xatolik yuz berdi");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('tashtech_admin_token');
+    setToken('');
+    setSubmissions([]);
+    setSelectedIds(new Set());
+  };
 
   // Filtered submissions based on search and status
   const filteredSubmissions = useMemo(() => {
@@ -114,7 +180,12 @@ export default function ExcelExportPage() {
       const apiEndpoint = import.meta.env.VITE_API_URL 
         ? `${import.meta.env.VITE_API_URL}/api/submissions/${id}` 
         : `/api/submissions/${id}`;
-      const res = await fetch(apiEndpoint, { method: 'DELETE' });
+      const res = await fetch(apiEndpoint, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) throw new Error("O'chirishda xatolik yuz berdi");
       setSubmissions(prev => prev.filter(s => s.id !== id));
       setSelectedIds(prev => {
@@ -143,7 +214,10 @@ export default function ExcelExportPage() {
         : `/api/submissions/bulk-delete`;
       const res = await fetch(apiEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ ids: idsArray })
       });
       if (!res.ok) throw new Error("O'chirishda xatolik yuz berdi");
@@ -311,6 +385,100 @@ export default function ExcelExportPage() {
 
   const allSelected = filteredSubmissions.length > 0 && selectedIds.size === filteredSubmissions.length;
 
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-[#edf0f5] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          {/* Card Header */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 text-center relative">
+            <div className="mx-auto w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20 mb-3 shadow-inner">
+              <Lock className="w-7 h-7 text-emerald-400" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">TashTech Admin</h2>
+            <p className="text-slate-300 text-xs sm:text-sm mt-1">Arizalar jadvaliga kirish uchun tizimga kiring</p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLogin} className="p-6 sm:p-8 space-y-4">
+            {loginError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Login / Foydalanuvchi nomi
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="admin"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Parol
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition text-slate-900"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3 px-4 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] transition shadow-md hover:shadow-indigo-500/25 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              {isLoggingIn ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Tekshirilmoqda...</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Tizimga kirish</span>
+                </>
+              )}
+            </button>
+
+            <div className="pt-2 text-center">
+              <a
+                href="/"
+                className="text-xs font-medium text-slate-500 hover:text-slate-800 transition inline-flex items-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Asosiy veb-saytga qaytish
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#edf0f5] text-slate-800 flex flex-col font-sans">
       
@@ -351,7 +519,7 @@ export default function ExcelExportPage() {
             )}
 
             <button
-              onClick={fetchSubmissions}
+              onClick={() => fetchSubmissions()}
               disabled={loading}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition border border-slate-300 disabled:opacity-50"
               title="Ro'yxatni qayta yangilash"
@@ -378,6 +546,15 @@ export default function ExcelExportPage() {
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>Excel (.xlsx) yuklab olish</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition border border-slate-300 hover:border-rose-200"
+              title="Tizimdan chiqish"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Chiqish</span>
             </button>
           </div>
         </div>

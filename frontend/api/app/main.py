@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
-from fastapi import FastAPI, Depends, Request, status, HTTPException
+from fastapi import FastAPI, Depends, Request, status, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from aiogram.types import Update
@@ -10,7 +10,7 @@ from aiogram.types import Update
 from .config import settings
 from .database import engine, Base, get_db
 from .models import Submission, BotSession, UserQuestion
-from .schemas import SubmissionCreate, SubmissionResponse, HealthResponse
+from .schemas import SubmissionCreate, SubmissionResponse, HealthResponse, AdminLoginRequest
 from .telegram_bot import send_to_telegram, get_bot, dp
 
 logging.basicConfig(
@@ -229,9 +229,47 @@ def seed_initial_data(db: Session):
     except Exception as e:
         logger.warning(f"Could not seed initial submissions: {e}")
 
+def verify_admin(
+    authorization: Optional[str] = Header(None),
+    x_admin_token: Optional[str] = Header(None)
+):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ", 1)[1].strip()
+    elif x_admin_token:
+        token = x_admin_token.strip()
+
+    if not token or token != settings.ADMIN_SECRET_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kirish taqiqlangan: login va parol talab qilinadi",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    return True
+
+@app.post("/api/admin/login")
+def admin_login(payload: AdminLoginRequest):
+    """Verify admin login credentials and return session token."""
+    if (payload.username.strip() == settings.ADMIN_USERNAME and 
+        payload.password.strip() == settings.ADMIN_PASSWORD):
+        return {
+            "ok": True,
+            "token": settings.ADMIN_SECRET_TOKEN,
+            "username": payload.username.strip()
+        }
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Login yoki parol noto'g'ri!"
+    )
+
 @app.get("/api/submissions", response_model=List[SubmissionResponse])
-def get_submissions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
-    """Retrieve list of submissions ordered by newest first."""
+def get_submissions(
+    skip: int = 0, 
+    limit: int = 10000, 
+    db: Session = Depends(get_db),
+    auth: bool = Depends(verify_admin)
+):
+    """Retrieve list of submissions ordered by newest first (Protected)."""
     seed_initial_data(db)
     submissions = (
         db.query(Submission)
@@ -243,8 +281,12 @@ def get_submissions(skip: int = 0, limit: int = 10000, db: Session = Depends(get
     return submissions
 
 @app.delete("/api/submissions/{submission_id}", status_code=status.HTTP_200_OK)
-def delete_submission(submission_id: int, db: Session = Depends(get_db)):
-    """Delete a single submission by ID to remove clutter/test entries."""
+def delete_submission(
+    submission_id: int, 
+    db: Session = Depends(get_db),
+    auth: bool = Depends(verify_admin)
+):
+    """Delete a single submission by ID to remove clutter/test entries (Protected)."""
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if not sub:
         raise HTTPException(status_code=404, detail="Ariza topilmadi")
@@ -253,8 +295,12 @@ def delete_submission(submission_id: int, db: Session = Depends(get_db)):
     return {"ok": True, "deleted_id": submission_id}
 
 @app.post("/api/submissions/bulk-delete")
-async def bulk_delete_submissions(request: Request, db: Session = Depends(get_db)):
-    """Delete multiple submissions at once."""
+async def bulk_delete_submissions(
+    request: Request, 
+    db: Session = Depends(get_db),
+    auth: bool = Depends(verify_admin)
+):
+    """Delete multiple submissions at once (Protected)."""
     try:
         body = await request.json()
         ids = body.get("ids", [])
@@ -266,4 +312,5 @@ async def bulk_delete_submissions(request: Request, db: Session = Depends(get_db
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
 

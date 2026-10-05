@@ -49,3 +49,8 @@ class HealthResponse(BaseModel):
     project: str
     telegram_configured: bool
     db_connected: bool
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+

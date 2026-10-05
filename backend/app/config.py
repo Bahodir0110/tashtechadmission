@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # CORS Origins
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000", "*"]
 
+    # Admin Credentials for /jadval
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = "tashtech2026"
+    ADMIN_SECRET_TOKEN: str = "tashtech_admin_token_2026"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
