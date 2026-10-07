@@ -38,6 +38,28 @@ export default function ExcelExportPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deletingId, setDeletingId] = useState(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const handleRestoreLeads = async () => {
+    setRestoring(true);
+    try {
+      const apiEndpoint = import.meta.env.VITE_API_URL 
+        ? `${import.meta.env.VITE_API_URL}/api/admin/restore-leads` 
+        : '/api/admin/restore-leads';
+      const res = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) throw new Error("Arizalarni tiklashda xatolik yuz berdi");
+      await fetchSubmissions(token);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const fetchSubmissions = async (activeToken = token) => {
     if (!activeToken) return;
@@ -529,6 +551,16 @@ export default function ExcelExportPage() {
             </button>
 
             <button
+              onClick={handleRestoreLeads}
+              disabled={restoring || loading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition border border-indigo-200 disabled:opacity-50"
+              title="Haqiqiy arizalarni qayta tiklash"
+            >
+              <RefreshCw className={`w-4 h-4 ${restoring ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Arizalarni tiklash</span>
+            </button>
+
+            <button
               onClick={exportToCsv}
               disabled={loading || submissions.length === 0}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-slate-800 hover:bg-slate-900 text-white transition shadow-sm disabled:opacity-50"
@@ -742,7 +774,15 @@ export default function ExcelExportPage() {
                 ) : filteredSubmissions.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="py-12 text-center text-slate-400">
-                      Hech qanday ariza topilmadi
+                      <p className="text-slate-600 font-medium mb-3">Hozircha ko'rsatiladigan arizalar topilmadi</p>
+                      <button
+                        onClick={handleRestoreLeads}
+                        disabled={restoring}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${restoring ? 'animate-spin' : ''}`} />
+                        <span>Arizalarni yuklash / tiklash</span>
+                      </button>
                     </td>
                   </tr>
                 ) : (

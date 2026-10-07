@@ -177,10 +177,10 @@ async def create_submission(
 
 from .initial_leads import INITIAL_LEADS
 
-def seed_initial_data(db: Session):
+def seed_initial_data(db: Session, force: bool = False):
     try:
-        flag = db.query(BotSession).filter(BotSession.user_id == "__INITIAL_LEADS_LOADED_V3__").first()
-        if flag:
+        count = db.query(Submission).count()
+        if count > 0 and not force:
             return
 
         for item in INITIAL_LEADS:
@@ -218,9 +218,8 @@ def seed_initial_data(db: Session):
                     user_agent=item.get("user_agent", "Telegram Bot")
                 )
                 db.add(sub)
-        db.add(BotSession(user_id="__INITIAL_LEADS_LOADED_V3__", step="DONE", data="{}"))
         db.commit()
-        logger.info("Successfully loaded 11 telegram leads into database.")
+        logger.info(f"Loaded initial leads. Current count: {db.query(Submission).count()}")
     except Exception as e:
         logger.warning(f"Initial leads loader error: {e}")
 
@@ -257,6 +256,16 @@ def admin_login(payload: AdminLoginRequest):
         detail="Login yoki parol noto'g'ri!"
     )
 
+@app.post("/api/admin/restore-leads")
+def restore_leads(
+    db: Session = Depends(get_db),
+    auth: bool = Depends(verify_admin)
+):
+    """Restore the 9 actual student leads into the database (Protected)."""
+    seed_initial_data(db, force=True)
+    subs = db.query(Submission).order_by(Submission.id.desc()).all()
+    return {"ok": True, "count": len(subs)}
+
 @app.get("/api/submissions", response_model=List[SubmissionResponse])
 def get_submissions(
     skip: int = 0, 
@@ -265,7 +274,7 @@ def get_submissions(
     auth: bool = Depends(verify_admin)
 ):
     """Retrieve list of submissions ordered by newest first (Protected)."""
-    seed_initial_data(db)
+    seed_initial_data(db, force=False)
     submissions = (
         db.query(Submission)
         .order_by(Submission.id.desc())

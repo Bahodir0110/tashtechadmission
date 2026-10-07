@@ -1,36 +1,6 @@
 INITIAL_LEADS = [
     {
         "id": 1,
-        "full_name": "Аааа",
-        "phone": "+998 7777777",
-        "telegram_username": "@7777777",
-        "region": "Сурхандарьинская область",
-        "school": "инха",
-        "question_text": "?",
-        "status": "Bekor qildi",
-        "is_contacted": False,
-        "contacted_by": "@angelina_usm",
-        "contacted_at": "2026-10-05 06:09:00",
-        "created_at": "2026-10-05 06:08:44",
-        "user_agent": "Telegram Bot (RU)"
-    },
-    {
-        "id": 2,
-        "full_name": "test",
-        "phone": "+998 111111111",
-        "telegram_username": "@test",
-        "region": "Toshkent shahri",
-        "school": "11",
-        "question_text": None,
-        "status": "Yangi",
-        "is_contacted": False,
-        "contacted_by": None,
-        "contacted_at": None,
-        "created_at": "2026-10-05 08:57:27",
-        "user_agent": "Telegram Bot (UZ)"
-    },
-    {
-        "id": 3,
         "full_name": "Jaloliddinov Salohiddin Ziyodulla o'g'li",
         "phone": "+998 997110938",
         "telegram_username": "@jaloliddinovff",
@@ -45,7 +15,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 4,
+        "id": 2,
         "full_name": "Mamatkulov Aziz Ilhomovich",
         "phone": "+998 508725842",
         "telegram_username": "@Azizjon_7o7",
@@ -60,7 +30,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 5,
+        "id": 3,
         "full_name": "Mardonova Mahliyo Davronovna",
         "phone": "+998 932118177",
         "telegram_username": "@Kaktus_br",
@@ -75,7 +45,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 6,
+        "id": 4,
         "full_name": "Жиянов Шохрух Максудович",
         "phone": "+998 903224538",
         "telegram_username": "@Shoxch1k_1",
@@ -90,7 +60,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 7,
+        "id": 5,
         "full_name": "Жиянов Шохрух Максудович",
         "phone": "+998 903224535",
         "telegram_username": "@Shxoch1k_1",
@@ -105,7 +75,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 8,
+        "id": 6,
         "full_name": "Jabborov Abbos Axtamovich",
         "phone": "+998 873006022",
         "telegram_username": "@Abbos",
@@ -120,7 +90,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 9,
+        "id": 7,
         "full_name": "Muhammadsafo Xasanjonov",
         "phone": "+998 979591619",
         "telegram_username": "@khasanjonov_m",
@@ -135,7 +105,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 10,
+        "id": 8,
         "full_name": "Шадаминов Ратмир Ренатович",
         "phone": "+998 998889044",
         "telegram_username": "@RatmirShadaminov",
@@ -150,7 +120,7 @@ INITIAL_LEADS = [
         "user_agent": "Telegram Bot (UZ)"
     },
     {
-        "id": 11,
+        "id": 9,
         "full_name": "Иброхимов Мухаммадхабиб Еркинбек уг’ли",
         "phone": "+998 958281011",
         "telegram_username": "@Aston_McMissile",
