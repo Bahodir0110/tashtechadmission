@@ -13,9 +13,13 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = (
-        "sqlite:////tmp/tashtech_submissions.db" 
-        if os.environ.get("VERCEL") 
-        else "sqlite:///./tashtech_submissions.db"
+        os.environ.get("POSTGRES_URL")
+        or os.environ.get("DATABASE_URL")
+        or (
+            "sqlite:////tmp/tashtech_submissions.db" 
+            if os.environ.get("VERCEL") 
+            else "sqlite:///./tashtech_submissions.db"
+        )
     )
     
     # CORS Origins

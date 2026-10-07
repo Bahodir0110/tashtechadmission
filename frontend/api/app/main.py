@@ -180,54 +180,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 def seed_initial_data(db: Session):
-    try:
-        already_seeded = db.query(BotSession).filter(BotSession.user_id == "__SEED_DONE__").first()
-        if already_seeded:
-            return
-
-        count = db.query(Submission).count()
-        if count == 0:
-            seed_file = Path(__file__).resolve().parent / "seed_submissions.json"
-            if seed_file.exists():
-                with open(seed_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for item in data:
-                    c_at = None
-                    if item.get("created_at"):
-                        try:
-                            c_at = datetime.fromisoformat(item["created_at"])
-                        except Exception:
-                            pass
-                    cont_at = None
-                    if item.get("contacted_at"):
-                        try:
-                            cont_at = datetime.fromisoformat(item["contacted_at"])
-                        except Exception:
-                            pass
-
-                    sub = Submission(
-                        id=item.get("id"),
-                        full_name=item.get("full_name", ""),
-                        phone=item.get("phone", ""),
-                        telegram_username=item.get("telegram_username", ""),
-                        region=item.get("region", ""),
-                        school=item.get("school", ""),
-                        question_text=item.get("question_text"),
-                        telegram_sent=bool(item.get("telegram_sent", False)),
-                        telegram_message_id=str(item.get("telegram_message_id") or ""),
-                        telegram_error=item.get("telegram_error"),
-                        status=item.get("status", "Yangi"),
-                        is_contacted=bool(item.get("is_contacted", False)),
-                        contacted_by=item.get("contacted_by"),
-                        contacted_at=cont_at,
-                        created_at=c_at or datetime.now(timezone.utc)
-                    )
-                    db.add(sub)
-                logger.info(f"Successfully seeded {len(data)} initial submissions.")
-        db.add(BotSession(user_id="__SEED_DONE__", step="DONE", data="{}"))
-        db.commit()
-    except Exception as e:
-        logger.warning(f"Could not seed initial submissions: {e}")
+    pass
 
 def verify_admin(
     authorization: Optional[str] = Header(None),
@@ -270,7 +223,6 @@ def get_submissions(
     auth: bool = Depends(verify_admin)
 ):
     """Retrieve list of submissions ordered by newest first (Protected)."""
-    seed_initial_data(db)
     submissions = (
         db.query(Submission)
         .order_by(Submission.id.desc())
