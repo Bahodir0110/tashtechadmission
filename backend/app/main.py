@@ -181,7 +181,7 @@ def seed_initial_data(db: Session, force: bool = False):
     try:
         count = db.query(Submission).count()
         if count > 0 and not force:
-            return
+            return count, None
 
         for item in INITIAL_LEADS:
             existing = db.query(Submission).filter(Submission.phone == item["phone"]).first()
@@ -219,9 +219,13 @@ def seed_initial_data(db: Session, force: bool = False):
                 )
                 db.add(sub)
         db.commit()
-        logger.info(f"Loaded initial leads. Current count: {db.query(Submission).count()}")
+        cur_count = db.query(Submission).count()
+        logger.info(f"Loaded initial leads. Current count: {cur_count}")
+        return cur_count, None
     except Exception as e:
+        db.rollback()
         logger.warning(f"Initial leads loader error: {e}")
+        return 0, str(e)
 
 def verify_admin(
     authorization: Optional[str] = Header(None),
@@ -262,9 +266,17 @@ def restore_leads(
     auth: bool = Depends(verify_admin)
 ):
     """Restore the 9 actual student leads into the database (Protected)."""
-    seed_initial_data(db, force=True)
+    count, err = seed_initial_data(db, force=True)
     subs = db.query(Submission).order_by(Submission.id.desc()).all()
-    return {"ok": True, "count": len(subs)}
+    dialect_name = getattr(getattr(db, "bind", None), "name", "unknown")
+    return {
+        "ok": err is None,
+        "count": len(subs),
+        "seed_count": count,
+        "error": err,
+        "dialect": dialect_name,
+        "total_leads_in_source": len(INITIAL_LEADS)
+    }
 
 @app.get("/api/submissions", response_model=List[SubmissionResponse])
 def get_submissions(
