@@ -175,58 +175,52 @@ async def create_submission(
 
     return db_submission
 
-import json
-from pathlib import Path
-from datetime import datetime, timezone
+from .initial_leads import INITIAL_LEADS
 
 def seed_initial_data(db: Session):
     try:
-        flag = db.query(BotSession).filter(BotSession.user_id == "__INITIAL_LEADS_LOADED_V2__").first()
+        flag = db.query(BotSession).filter(BotSession.user_id == "__INITIAL_LEADS_LOADED_V3__").first()
         if flag:
             return
 
-        seed_file = Path(__file__).resolve().parent / "seed_submissions.json"
-        if seed_file.exists():
-            with open(seed_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for item in data:
-                existing = db.query(Submission).filter(Submission.phone == item["phone"]).first()
-                if not existing:
-                    c_at = None
-                    if item.get("created_at"):
-                        try:
-                            c_at = datetime.fromisoformat(item["created_at"])
-                        except Exception:
-                            pass
-                    cont_at = None
-                    if item.get("contacted_at"):
-                        try:
-                            cont_at = datetime.fromisoformat(item["contacted_at"])
-                        except Exception:
-                            pass
+        for item in INITIAL_LEADS:
+            existing = db.query(Submission).filter(Submission.phone == item["phone"]).first()
+            if not existing:
+                c_at = None
+                if item.get("created_at"):
+                    try:
+                        c_at = datetime.fromisoformat(item["created_at"])
+                    except Exception:
+                        pass
+                cont_at = None
+                if item.get("contacted_at"):
+                    try:
+                        cont_at = datetime.fromisoformat(item["contacted_at"])
+                    except Exception:
+                        pass
 
-                    sub = Submission(
-                        id=item.get("id"),
-                        full_name=item.get("full_name", ""),
-                        phone=item.get("phone", ""),
-                        telegram_username=item.get("telegram_username", ""),
-                        region=item.get("region", ""),
-                        school=item.get("school", ""),
-                        question_text=item.get("question_text"),
-                        telegram_sent=True,
-                        telegram_message_id="",
-                        telegram_error=None,
-                        status=item.get("status", "Yangi"),
-                        is_contacted=bool(item.get("is_contacted", False)),
-                        contacted_by=item.get("contacted_by"),
-                        contacted_at=cont_at,
-                        created_at=c_at or datetime.now(timezone.utc),
-                        user_agent=item.get("user_agent", "Telegram Bot")
-                    )
-                    db.add(sub)
-            db.add(BotSession(user_id="__INITIAL_LEADS_LOADED_V2__", step="DONE", data="{}"))
-            db.commit()
-            logger.info("Successfully loaded 11 telegram leads into database.")
+                sub = Submission(
+                    id=item.get("id"),
+                    full_name=item.get("full_name", ""),
+                    phone=item.get("phone", ""),
+                    telegram_username=item.get("telegram_username", ""),
+                    region=item.get("region", ""),
+                    school=item.get("school", ""),
+                    question_text=item.get("question_text"),
+                    telegram_sent=True,
+                    telegram_message_id="",
+                    telegram_error=None,
+                    status=item.get("status", "Yangi"),
+                    is_contacted=bool(item.get("is_contacted", False)),
+                    contacted_by=item.get("contacted_by"),
+                    contacted_at=cont_at,
+                    created_at=c_at or datetime.now(timezone.utc),
+                    user_agent=item.get("user_agent", "Telegram Bot")
+                )
+                db.add(sub)
+        db.add(BotSession(user_id="__INITIAL_LEADS_LOADED_V3__", step="DONE", data="{}"))
+        db.commit()
+        logger.info("Successfully loaded 11 telegram leads into database.")
     except Exception as e:
         logger.warning(f"Initial leads loader error: {e}")
 
