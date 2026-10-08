@@ -942,7 +942,61 @@ async def on_status_callback(callback: CallbackQuery):
         
         db = SessionLocal()
         try:
-            sub = db.query(Submission).filter(Submission.id == submission_id).first()
+            msg_text = (callback.message.text or callback.message.caption or "") if callback.message else ""
+            
+            # 1. Extract phone and name from message text to verify or fallback
+            phone_match = re.search(r'\+998[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}', msg_text)
+            if not phone_match:
+                phone_match = re.search(r'\+?\d{9,15}', msg_text)
+            extracted_phone = phone_match.group(0).replace(" ", "").replace("-", "") if phone_match else None
+
+            name_match = re.search(r'F\.I\.Sh:\s*([^\n\r]+)', msg_text)
+            extracted_name = name_match.group(1).strip() if name_match else None
+
+            sub = None
+
+            # First priority: Match by phone number from message text
+            # (Fixes mismatched IDs where Telegram message has old #1 but student is #11 in database)
+            if extracted_phone:
+                last9 = re.sub(r'\D', '', extracted_phone)[-9:]
+                sub = db.query(Submission).filter(Submission.phone.like(f"%{last9}%")).first()
+
+            # Second priority: Find by submission_id from callback_data
+            if not sub and submission_id:
+                sub = db.query(Submission).filter(Submission.id == submission_id).first()
+
+            # Third priority: Match by full name from message text
+            if not sub and extracted_name:
+                sub = db.query(Submission).filter(Submission.full_name.ilike(f"%{extracted_name}%")).first()
+
+            # Fourth priority: Auto-rescue directly from Telegram message text if deleted or missing
+            if not sub and extracted_name:
+                logger.info(f"Auto-rescuing submission for '{extracted_name}' directly from Telegram message text!")
+                reg_match = re.search(r'Hudud[^\:]*:\s*([^\n\r]+)', msg_text)
+                extracted_reg = reg_match.group(1).strip() if reg_match else "Toshkent shahri"
+                
+                sch_match = re.search(r'(?:maktab|litsey)[^\:]*:\s*([^\n\r]+)', msg_text, re.IGNORECASE)
+                extracted_sch = sch_match.group(1).strip() if sch_match else ""
+                
+                q_match = re.search(r'(?:Savol|Izoh)[^\:]*:\s*\n?([^\n\r]+)', msg_text)
+                extracted_q = q_match.group(1).strip() if q_match else None
+                
+                tg_match = re.search(r'Telegram:\s*([^\n\r]+)', msg_text)
+                extracted_tg = tg_match.group(1).strip() if tg_match else ""
+
+                sub = Submission(
+                    full_name=extracted_name,
+                    phone=extracted_phone or "+998 000000000",
+                    telegram_username=extracted_tg,
+                    region=extracted_reg,
+                    school=extracted_sch,
+                    question_text=extracted_q,
+                    user_agent="Telegram Bot (Rescued)"
+                )
+                db.add(sub)
+                db.commit()
+                db.refresh(sub)
+
             if sub:
                 if action == "contacted":
                     sub.status = "Aloqaga chiqildi"
@@ -971,7 +1025,7 @@ async def on_status_callback(callback: CallbackQuery):
                     if raw_lang in ("uz", "ru", "en"):
                         lang_code = raw_lang
 
-                # Regenerate updated message
+                # Regenerate updated message with real sub.id
                 new_text = format_telegram_message(
                     submission_id=sub.id,
                     full_name=sub.full_name,
@@ -990,12 +1044,12 @@ async def on_status_callback(callback: CallbackQuery):
                 if callback.message:
                     await callback.message.edit_text(
                         text=new_text,
-                        reply_markup=get_status_keyboard(submission_id, current_status=sub.status),
+                        reply_markup=get_status_keyboard(sub.id, current_status=sub.status),
                         disable_web_page_preview=True
                     )
                 
                 await callback.answer(alert_text, show_alert=False)
-                logger.info(f"Submission #{submission_id} status updated to '{sub.status}' by {user_name}")
+                logger.info(f"Submission #{sub.id} ('{sub.full_name}') status updated to '{sub.status}' by {user_name}")
             else:
                 await callback.answer("Ariza topilmadi.", show_alert=True)
         finally:
