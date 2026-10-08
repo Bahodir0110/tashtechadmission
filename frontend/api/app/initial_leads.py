@@ -222,6 +222,17 @@ def seed_initial_data(db: Session, force: bool = False):
             db.add(BotSession(user_id=SEED_VERSION_KEY, step="DONE", data="{}"))
 
         db.commit()
+
+        # In PostgreSQL, reset sequence so auto-increment begins from max(id) + 1 (12+)
+        try:
+            from sqlalchemy import text
+            dialect_name = getattr(getattr(db, "bind", None), "name", "")
+            if dialect_name == "postgresql":
+                db.execute(text("SELECT setval(pg_get_serial_sequence('submissions', 'id'), coalesce((SELECT max(id) FROM submissions), 1));"))
+                db.commit()
+        except Exception as seq_err:
+            logger.warning(f"PostgreSQL sequence sync warning: {seq_err}")
+
         cur_count = db.query(Submission).count()
         logger.info(f"Loaded initial leads. Current count: {cur_count}")
         return cur_count, None
