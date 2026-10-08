@@ -22,6 +22,7 @@ from aiogram.exceptions import TelegramAPIError
 from .config import settings
 from .database import SessionLocal
 from .models import Submission, BotSession, UserQuestion
+from .initial_leads import seed_initial_data
 
 logger = logging.getLogger("tashtech.telegram")
 
@@ -435,6 +436,7 @@ def format_telegram_message(
 # =====================================================================
 
 def get_or_create_session(db, user_id: str) -> BotSession:
+    seed_initial_data(db)
     sess = db.query(BotSession).filter(BotSession.user_id == user_id).first()
     if not sess:
         sess = BotSession(user_id=user_id, step="IDLE", data=json.dumps({"lang": "uz"}))
@@ -732,6 +734,9 @@ async def on_private_message(message: Message):
             q_text = (message.text or "").strip()
             if q_text in SKIP_BUTTONS or not q_text:
                 q_text = None
+
+            # Ensure baseline initial leads exist so submission IDs are sequential (12+)
+            seed_initial_data(db)
 
             # Create Submission in Database
             new_sub = Submission(

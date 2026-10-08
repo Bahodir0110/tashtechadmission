@@ -143,6 +143,9 @@ async def create_submission(
 
     logger.info(f"Received new submission from '{payload.full_name}' ({payload.phone}) for school '{payload.school}'")
 
+    # Ensure baseline initial leads are seeded so IDs are sequential and consistent
+    seed_initial_data(db)
+
     db_submission = Submission(
         full_name=payload.full_name.strip(),
         phone=payload.phone.strip(),
@@ -176,57 +179,7 @@ async def create_submission(
 
     return db_submission
 
-from .initial_leads import INITIAL_LEADS
-
-def seed_initial_data(db: Session, force: bool = False):
-    try:
-        count = db.query(Submission).count()
-        if count > 0 and not force:
-            return count, None
-
-        for item in INITIAL_LEADS:
-            existing = db.query(Submission).filter(Submission.phone == item["phone"]).first()
-            if not existing:
-                c_at = None
-                if item.get("created_at"):
-                    try:
-                        c_at = datetime.fromisoformat(item["created_at"])
-                    except Exception:
-                        pass
-                cont_at = None
-                if item.get("contacted_at"):
-                    try:
-                        cont_at = datetime.fromisoformat(item["contacted_at"])
-                    except Exception:
-                        pass
-
-                sub = Submission(
-                    id=item.get("id"),
-                    full_name=item.get("full_name", ""),
-                    phone=item.get("phone", ""),
-                    telegram_username=item.get("telegram_username", ""),
-                    region=item.get("region", ""),
-                    school=item.get("school", ""),
-                    question_text=item.get("question_text"),
-                    telegram_sent=True,
-                    telegram_message_id="",
-                    telegram_error=None,
-                    status=item.get("status", "Yangi"),
-                    is_contacted=bool(item.get("is_contacted", False)),
-                    contacted_by=item.get("contacted_by"),
-                    contacted_at=cont_at,
-                    created_at=c_at or datetime.now(timezone.utc),
-                    user_agent=item.get("user_agent", "Telegram Bot")
-                )
-                db.add(sub)
-        db.commit()
-        cur_count = db.query(Submission).count()
-        logger.info(f"Loaded initial leads. Current count: {cur_count}")
-        return cur_count, None
-    except Exception as e:
-        db.rollback()
-        logger.warning(f"Initial leads loader error: {e}")
-        return 0, str(e)
+from .initial_leads import INITIAL_LEADS, seed_initial_data
 
 def verify_admin(
     authorization: Optional[str] = Header(None),

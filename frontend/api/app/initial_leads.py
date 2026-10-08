@@ -1,3 +1,10 @@
+import logging
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+from .models import Submission, BotSession
+
+logger = logging.getLogger("tashtech.initial_leads")
+
 INITIAL_LEADS = [
     {
         "id": 1,
@@ -133,5 +140,92 @@ INITIAL_LEADS = [
         "contacted_at": None,
         "created_at": "2026-10-07 07:15:49",
         "user_agent": "Telegram Bot (UZ)"
+    },
+    {
+        "id": 10,
+        "full_name": "Azimjanov Behruz",
+        "phone": "+998 942272739",
+        "telegram_username": "@slimli01m07@gmail.com",
+        "region": "Toshkent shahri",
+        "school": "185",
+        "question_text": None,
+        "status": "Yangi",
+        "is_contacted": False,
+        "contacted_by": None,
+        "contacted_at": None,
+        "created_at": "2026-10-07 14:27:19",
+        "user_agent": "Telegram Bot (UZ)"
+    },
+    {
+        "id": 11,
+        "full_name": "Hasanov Abdurahmon Racshanovich",
+        "phone": "+998 917175775",
+        "telegram_username": "@abdurahmon_hasanov",
+        "region": "Surxondaryo viloyati",
+        "school": "78-maktab",
+        "question_text": None,
+        "status": "Yangi",
+        "is_contacted": False,
+        "contacted_by": None,
+        "contacted_at": None,
+        "created_at": "2026-10-07 14:54:56",
+        "user_agent": "Telegram Bot (UZ)"
     }
 ]
+
+SEED_VERSION_KEY = "__SEEDED_V5_11_LEADS__"
+
+def seed_initial_data(db: Session, force: bool = False):
+    try:
+        flag = db.query(BotSession).filter(BotSession.user_id == SEED_VERSION_KEY).first()
+        if flag and not force:
+            count = db.query(Submission).count()
+            return count, None
+
+        for item in INITIAL_LEADS:
+            existing = db.query(Submission).filter(Submission.phone == item["phone"]).first()
+            if not existing:
+                c_at = None
+                if item.get("created_at"):
+                    try:
+                        c_at = datetime.fromisoformat(item["created_at"])
+                    except Exception:
+                        pass
+                cont_at = None
+                if item.get("contacted_at"):
+                    try:
+                        cont_at = datetime.fromisoformat(item["contacted_at"])
+                    except Exception:
+                        pass
+
+                sub = Submission(
+                    id=item.get("id"),
+                    full_name=item.get("full_name", ""),
+                    phone=item.get("phone", ""),
+                    telegram_username=item.get("telegram_username", ""),
+                    region=item.get("region", ""),
+                    school=item.get("school", ""),
+                    question_text=item.get("question_text"),
+                    telegram_sent=True,
+                    telegram_message_id="",
+                    telegram_error=None,
+                    status=item.get("status", "Yangi"),
+                    is_contacted=bool(item.get("is_contacted", False)),
+                    contacted_by=item.get("contacted_by"),
+                    contacted_at=cont_at,
+                    created_at=c_at or datetime.now(timezone.utc),
+                    user_agent=item.get("user_agent", "Telegram Bot")
+                )
+                db.add(sub)
+
+        if not flag:
+            db.add(BotSession(user_id=SEED_VERSION_KEY, step="DONE", data="{}"))
+
+        db.commit()
+        cur_count = db.query(Submission).count()
+        logger.info(f"Loaded initial leads. Current count: {cur_count}")
+        return cur_count, None
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Initial leads loader error: {e}")
+        return 0, str(e)
