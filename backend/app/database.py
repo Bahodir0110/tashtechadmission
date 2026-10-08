@@ -1,4 +1,6 @@
 import os
+import re
+import ssl
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -12,35 +14,42 @@ raw_db_url = (
     or settings.DATABASE_URL
 )
 
-# Convert postgres:// to postgresql:// for SQLAlchemy compatibility
-if raw_db_url.startswith("postgres://"):
-    raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+engine = None
 
-# Clean channel_binding if present to prevent libpq parameter issues
-clean_db_url = raw_db_url
-for cb in ["channel_binding=require&", "&channel_binding=require", "?channel_binding=require"]:
-    if cb in clean_db_url:
-        clean_db_url = clean_db_url.replace(cb, "")
-
-connect_args = {}
-engine_kwargs = {"echo": False}
-
-if clean_db_url.startswith("sqlite"):
-    connect_args["check_same_thread"] = False
-    engine = create_engine(clean_db_url, connect_args=connect_args, **engine_kwargs)
-else:
-    # Serverless PostgreSQL settings
-    engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_recycle"] = 300
+if raw_db_url and ("postgres" in raw_db_url):
     try:
-        engine = create_engine(clean_db_url, connect_args=connect_args, **engine_kwargs)
+        # Prepare pure-Python pg8000 connection
+        pg_url = raw_db_url
+        if pg_url.startswith("postgres://"):
+            pg_url = pg_url.replace("postgres://", "postgresql+pg8000://", 1)
+        elif pg_url.startswith("postgresql://"):
+            pg_url = pg_url.replace("postgresql://", "postgresql+pg8000://", 1)
+
+        # Remove libpq parameters that pg8000 doesn't accept in query string
+        clean_pg_url = re.sub(r'[?&](sslmode|channel_binding)=[^&]*', '', pg_url).rstrip('?&')
+
+        ssl_ctx = ssl.create_default_context()
+        engine = create_engine(
+            clean_pg_url,
+            connect_args={"ssl_context": ssl_ctx},
+            pool_pre_ping=True,
+            pool_recycle=300
+        )
         with engine.connect() as conn:
             pass
-        logger.info("Successfully connected to PostgreSQL using default driver.")
+        logger.info("Successfully connected to Neon PostgreSQL via pg8000.")
     except Exception as e:
-        logger.warning(f"Default PostgreSQL driver error ({e}), trying pg8000 fallback...")
-        pg8000_url = clean_db_url.replace("postgresql://", "postgresql+pg8000://", 1)
-        engine = create_engine(pg8000_url, connect_args=connect_args, **engine_kwargs)
+        logger.error(f"PostgreSQL connection error: {e}. Falling back to SQLite.")
+        engine = None
+
+if engine is None:
+    sqlite_url = (
+        "sqlite:////tmp/tashtech_submissions.db" 
+        if os.environ.get("VERCEL") 
+        else "sqlite:///./tashtech_submissions.db"
+    )
+    engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
+    logger.info("Using SQLite database.")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
